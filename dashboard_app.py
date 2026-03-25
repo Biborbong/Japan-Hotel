@@ -23,22 +23,33 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Support both flat repo layout (Streamlit Cloud) and local output/ subfolder.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_CWD = os.getcwd()
 
 
 def _find_csv(filename: str) -> str:
-    """Resolve CSV path: check output/ subfolder first, then repo root (flat GitHub layout)."""
-    in_output = os.path.join(BASE_DIR, "output", filename)
-    if os.path.exists(in_output):
-        return in_output
-    return os.path.join(BASE_DIR, filename)
+    """Search several candidate locations; return first that exists."""
+    candidates = [
+        os.path.join(_SCRIPT_DIR, "output", filename),  # local output/ subfolder
+        os.path.join(_CWD, "output", filename),         # cwd output/ subfolder
+        os.path.join(_SCRIPT_DIR, filename),           # flat repo root (Streamlit Cloud)
+        os.path.join(_CWD, filename),                   # current working dir
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return candidates[0]  # fallback to flat root even if missing
 
 
+BASE_DIR = _SCRIPT_DIR
 JHR_CSV  = _find_csv("JHRTH_Extracted_Data.csv")
 INV_CSV  = _find_csv("Invincible_Extracted_Data.csv")
 JNTO_CSV = _find_csv("JNTO_Extracted_Data.csv")
-EXTRACTOR_SCRIPT = os.path.join(BASE_DIR, "hotel_reit_extractor.py")
-JNTO_SCRIPT = os.path.join(BASE_DIR, "jnto_scraper.py")
+
+# Ensure scripts are found correctly
+EXTRACTOR_SCRIPT = os.path.join(_SCRIPT_DIR, "hotel_reit_extractor.py")
+JNTO_SCRIPT = os.path.join(_SCRIPT_DIR, "jnto_scraper.py")
 
 DEFAULT_START = date(2019, 1, 1)
 EARLIEST_DATE = date(2003, 1, 1)
@@ -117,7 +128,7 @@ def refresh_all_data() -> bool:
         try:
             r = subprocess.run(
                 [sys.executable, EXTRACTOR_SCRIPT],
-                capture_output=True, text=True, timeout=600, cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=600, cwd=_SCRIPT_DIR,
             )
             if r.returncode != 0:
                 st.error(f"REIT extractor error:\n{r.stderr[-2000:]}")
@@ -135,7 +146,7 @@ def refresh_all_data() -> bool:
         try:
             r = subprocess.run(
                 [sys.executable, JNTO_SCRIPT],
-                capture_output=True, text=True, timeout=120, cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=120, cwd=_SCRIPT_DIR,
             )
             if r.returncode != 0:
                 st.warning(f"JNTO scraper warning:\n{r.stderr[-1000:]}")
